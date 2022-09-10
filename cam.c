@@ -44,7 +44,7 @@ int sanity_check(int buf_idx, int offset) {
 		dlog("Info: sanity check: offset = %d\n", offset);
 	}
 	perror_ret(ioctl(fd, CAM_V2P_IOCTL, &addr), "CAM_V2P_IOCTL");
-	assert(buffers[buf_idx].addrPhyY == addr);
+	assert(buffers[buf_idx].addrPhyY == (void *) addr);
 	check_cnt += 1;
 #endif
 	return 0;
