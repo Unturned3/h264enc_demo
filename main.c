@@ -22,12 +22,13 @@
 #include "conf.h"
 
 /*
+	More detail on the v4l2 / media-ctl API:
+	https://docs.kernel.org/userspace-api/media/v4l/v4l2.html
+	https://www.kernel.org/doc/html/latest/userspace-api/media/mediactl/media-controller.html
+
 	Getting subdevice name from major & minor numbers:
 	https://git.linuxtv.org/v4l-utils.git/tree/utils/media-ctl/libmediactl.c
 	in function 'media_get_devname_sysfs()'
-
-	More detail on the media-ctl API:
-	https://www.kernel.org/doc/html/latest/userspace-api/media/mediactl/media-controller.html
 */
 
 void usage(char *argv0) {
@@ -57,7 +58,7 @@ int main(int argc, char **argv) {
 
 		dlog_cleanup(h264_init(width, height), DLOG_CRIT "Error: h264_init() failed\n");
 		dlog_cleanup(cam_open(), DLOG_CRIT "Error: cam_open() failed\n");
-		dlog_cleanup(cam_init(width, height, V4L2_PIX_FMT_NV12),
+		dlog_cleanup(cam_init(width, height, G_V4L2_PIX_FMT),
 					DLOG_CRIT "Error: cam_init() failed\n");
 	}
 	else {
@@ -70,12 +71,15 @@ int main(int argc, char **argv) {
 
 	rt_timer_start();
 
+	// Capture frames
 	for (int i=0; i<G_FRAMES; i++) {
 
+		// Dequeue buffer and get its index
 		int j = cam_dqbuf();
 		dlog_cleanup(j, DLOG_CRIT "Error: cam_dqbuf() failed");
 		buffer_t *buf = cam_get_buf(j);
 
+		// Encode frame
 		dlog_cleanup(h264_encode(buf->addrPhyY, buf->addrPhyC), DLOG_CRIT "Error: h264_encode() failed\n");
 
 		if (ENABLE_SAVE) {
@@ -87,12 +91,12 @@ int main(int argc, char **argv) {
 			fwrite(buf->start, 1, buf->length, fp);
 			fclose(fp);
 		}
+
 		// Queue the recently dequeued buffer back to the device
 		dlog_cleanup(cam_qbuf(), DLOG_CRIT "Error: cam_qbuf() failed\n");
 	}
 
 	rt_timer_stop();
-
 	double elapsed = rt_timer_elapsed();
 
 	dlog("\nInfo: captured %d frames in %.2fs; FPS = %.1f\n",

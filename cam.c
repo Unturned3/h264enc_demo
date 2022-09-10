@@ -27,6 +27,7 @@ static int g_buf_count = G_BUF_COUNT;
 static int buf_idx = 0;
 static buffer_t *buffers = NULL;
 
+// List of V4L2 controls that will be set upon device init
 #define NUM_CTRLS 2
 struct v4l2_control ctrls[NUM_CTRLS] = {
 	{V4L2_CID_HFLIP, 1},
@@ -56,6 +57,12 @@ int cam_open() {
 	return 0;
 }
 
+// Initialize media bus settings
+// This is needed for DVP cameras that uses the V4L2 subdev API
+// Probably won't work for USB webcams and such
+// For more info, see
+// https://www.kernel.org/doc/html/latest/userspace-api/media/mediactl/media-controller.html
+//
 static int cam_media_init() {
 	int ret = 0;
 	struct media_v2_entity *mve = NULL;
@@ -63,6 +70,8 @@ static int cam_media_init() {
 
 	int mfd = open("/dev/media0", O_RDWR, 0);
 	perror_cleanup(mfd, "open /dev/media0");
+	int sfd = open("/dev/v4l-subdev0", O_RDWR);
+	perror_cleanup(sfd, "open /dev/v4l2-subdev0");
 
 	struct media_device_info mdi;
 	CLEAR(mdi);
@@ -118,9 +127,10 @@ static int cam_media_init() {
 
 	struct media_entity_desc dsc = { .id = entity_id };
 	perror_cleanup(ioctl(mfd, MEDIA_IOC_ENUM_ENTITIES, &dsc), "MEDIA_IOC_ENUM_ENTITIES");
-
 	dlog(DLOG_DEBUG "Debug: %s: subdev major = %d, minor = %d\n",
 		dsc.name, dsc.dev.major, dsc.dev.minor);
+	
+	// Set frame rate
 
 	struct v4l2_fract fract = { .numerator = 1, .denominator = G_FPS };
 	struct v4l2_subdev_frame_interval ival = {
@@ -128,12 +138,12 @@ static int cam_media_init() {
 		.pad = subdev_pad,
 	};
 
-	int sfd = open("/dev/v4l-subdev0", O_RDWR);
-	perror_cleanup(sfd, "open /dev/v4l2-subdev0");
 	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &ival),
 					"VIDIOC_SUBDEV_S_FRAME_INTERVAL");
 	
 	dlog("Info: %s: frame rate set to %d\n", G_SUBDEV_ENTITY_NAME, G_FPS);
+
+	// Set subdev media bus format
 
 	struct v4l2_subdev_format sfmt = {
 		.pad = subdev_pad,
@@ -180,6 +190,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 		return -1;
 	}
 
+	// Query device capabilities
 	struct v4l2_capability cap;
 	CLEAR(cap);
 	perror_ret(ioctl(fd, VIDIOC_QUERYCAP, &cap), "VIDIOC_QUERYCAP");
@@ -190,6 +201,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 		return -1;
 	}
 	
+	// Set V4L2 format
 	struct v4l2_format fmt = {
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 		.fmt.pix.width = width,
@@ -198,9 +210,11 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 	};
 	perror_ret(ioctl(fd, VIDIOC_S_FMT, &fmt), "VIDIOC_S_FMT");
 	
+	// Set V4L2 controls specified in array ctrls[]
 	for (int i=0; i<NUM_CTRLS; i++)
 		perror_ret(ioctl(fd, VIDIOC_S_CTRL, &ctrls[i]), "VIDIOC_S_CTRL");
 
+	// Request buffers from device (for storing frames later)
 	struct v4l2_requestbuffers req = {
 		.count = g_buf_count,
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -208,7 +222,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 	};
 	perror_ret(ioctl(fd, VIDIOC_REQBUFS, &req), "VIDIOC_REQBUFS");
 
-	g_buf_count = req.count;	// update the actual number of buffers expected by device
+	g_buf_count = req.count;	// Update the actual number of buffers expected by device
 
 	buffers = calloc(g_buf_count, sizeof(*buffers));
 
@@ -217,6 +231,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 		return -1;
 	}
 
+	// MMAP buffers
 	for (int i=0; i<g_buf_count; i++) {
 		struct v4l2_buffer buf = {
 			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -237,7 +252,11 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 		buffers[i].addrVirC = buffers[i].start + g_width * g_height;
 		
 		int addr = buf.m.offset;
+
+		// dirty hack to get physical address of buffers
+		// see github repo README for details
 		perror_ret(ioctl(fd, CAM_V2P_IOCTL, &addr), "CAM_V2P_IOCTL");
+
 		buffers[i].addrPhyY = (void *) addr;
 		//buffers[i].addrPhyC = addr + ALIGN_16B(g_width) * ALIGN_16B(g_height);
 		buffers[i].addrPhyC = (void *) (addr + g_width * g_height);

@@ -73,6 +73,7 @@ int h264_init(int width, int height) {
 	}
 	VideoEncInit(gVideoEnc, &baseConfig);
 
+	// Write SPS, PPS NAL units
 	VencHeaderData sps_pps_data;
 	VideoEncGetParameter(gVideoEnc, VENC_IndexParamH264SPSPPS, &sps_pps_data);
 	fwrite(sps_pps_data.pBuffer, 1, sps_pps_data.nLength, fpH264);
@@ -82,10 +83,13 @@ int h264_init(int width, int height) {
 }
 
 int h264_encode(unsigned char *addrPhyY, unsigned char *addrPhyC) {
+	// Prepare buffers
 	VencInputBuffer inputBuffer;
 	VencOutputBuffer outputBuffer;
 	CLEAR(inputBuffer);
 	CLEAR(outputBuffer);
+	// Pass pre-allocated buffer (from V4L2) to CedarVE
+	// No need to use AllocInputBuffer() and copy data unnecessarily
 	inputBuffer.pAddrPhyY = addrPhyY;
 	inputBuffer.pAddrPhyC = addrPhyC;
 	AddOneInputBuffer(gVideoEnc, &inputBuffer);
@@ -95,6 +99,7 @@ int h264_encode(unsigned char *addrPhyY, unsigned char *addrPhyC) {
 		return -1;
 	}
 
+	// Mark buffer as used, and get output H.264 bitstream
 	AlreadyUsedInputBuffer(gVideoEnc, &inputBuffer);
 	GetOneBitstreamFrame(gVideoEnc, &outputBuffer);
 
