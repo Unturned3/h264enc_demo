@@ -6,7 +6,7 @@
 #include <linux/videodev2.h>
 #include <vencoder.h>
 
-#define ENABLE_DEBUG
+//#define ENABLE_DEBUG
 #define ENABLE_DLOG
 #define ENABLE_SAVE 0
 

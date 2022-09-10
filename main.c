@@ -38,6 +38,9 @@ void usage(char *argv0) {
 }
 
 int main(int argc, char **argv) {
+#ifdef ENABLE_DEBUG
+	dlog_set_level(DLOG_DEBUG);
+#endif
 	int ret = 0;
 
 	if (argc < 3) {
@@ -48,18 +51,19 @@ int main(int argc, char **argv) {
 	int width = atoi(argv[1]);
 	int height = atoi(argv[2]);
 
-	dlog_cleanup(h264_init(), DLOG_CRIT "Error: h264_init() failed\n");
-	dlog_cleanup(cam_open(), DLOG_CRIT "Error: cam_open() failed\n");
-
 	if ((width == 640 && height == 480) ||
 		(width == 1280 && height == 720) ||
 		(width == 1920 && height == 1080)) {
+
+		dlog_cleanup(h264_init(width, height), DLOG_CRIT "Error: h264_init() failed\n");
+		dlog_cleanup(cam_open(), DLOG_CRIT "Error: cam_open() failed\n");
 		dlog_cleanup(cam_init(width, height, V4L2_PIX_FMT_NV12),
 					DLOG_CRIT "Error: cam_init() failed\n");
 	}
 	else {
 		dlog(DLOG_CRIT "Error: unsupported width/height\n");
 		usage(argv[0]);
+		return 0;
 	}
 
 	dlog_cleanup(cam_start_capture(), DLOG_CRIT "Error: cam_start_capture() failed\n");
@@ -101,3 +105,4 @@ cleanup:
 	h264_deinit();
 	return ret;
 }
+

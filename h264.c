@@ -18,11 +18,14 @@ static int g_pix_fmt = G_CEDARC_PIX_FMT;
 
 FILE *fpH264 = NULL;
 
-int h264_init() {
+int h264_init(int width, int height) {
+
+	g_width = width;
+	g_height = height;
 
 	fpH264 = fopen("/mnt/out.h264", "wb");
 	if (fpH264 == NULL) {
-		dlog("Error: failed to open /mnt/out.h264 for writing\n");
+		dlog(DLOG_CRIT "Error: failed to open /mnt/out.h264 for writing\n");
 		return -1;
 	}
 
@@ -41,7 +44,7 @@ int h264_init() {
 	CLEAR(baseConfig);
 	baseConfig.memops = MemAdapterGetOpsS();
 	if (baseConfig.memops == NULL) {
-		dlog("Error: MemAdapterGetOpsS() failed\n");
+		dlog(DLOG_CRIT "Error: MemAdapterGetOpsS() failed\n");
 		return -1;
 	}
 	CdcMemOpen(baseConfig.memops);
@@ -55,7 +58,7 @@ int h264_init() {
 
 	gVideoEnc = VideoEncCreate(VENC_CODEC_H264);
 	if (gVideoEnc == NULL) {
-		dlog("Error: VideoEncCreate() failed\n");
+		dlog(DLOG_CRIT "Error: VideoEncCreate() failed\n");
 		return -1;
 	}
 
@@ -74,7 +77,7 @@ int h264_init() {
 	VideoEncGetParameter(gVideoEnc, VENC_IndexParamH264SPSPPS, &sps_pps_data);
 	fwrite(sps_pps_data.pBuffer, 1, sps_pps_data.nLength, fpH264);
 
-	dlog("Info: h264 encocder init OK\n");
+	dlog(DLOG_INFO "Info: h264 encocder init OK\n");
 	return 0;
 }
 

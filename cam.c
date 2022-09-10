@@ -41,7 +41,7 @@ int sanity_check(int buf_idx, int offset) {
 #ifdef ENABLE_DEBUG
 	int addr = offset;
 	if (check_cnt % 30 == 29) {
-		dlog("Info: sanity check: offset = %d\n", offset);
+		dlog(DLOG_DEBUG "Debug: sanity check: offset = %d\n", offset);
 	}
 	perror_ret(ioctl(fd, CAM_V2P_IOCTL, &addr), "CAM_V2P_IOCTL");
 	assert(buffers[buf_idx].addrPhyY == (void *) addr);
@@ -68,18 +68,19 @@ static int cam_media_init() {
 	CLEAR(mdi);
 	perror_cleanup(ioctl(mfd, MEDIA_IOC_DEVICE_INFO, &mdi), "MEDIA_IOC_DEVICE_INFO");
 
-	dlog("Info: media device driver: %s\n", mdi.driver);
+	dlog(DLOG_DEBUG "Debug: media device driver: %s\n", mdi.driver);
 
 	struct media_v2_topology mvt;
 	CLEAR(mvt);
 	perror_cleanup(ioctl(mfd, MEDIA_IOC_G_TOPOLOGY, &mvt), "MEDIA_IOC_G_TOPOLOGY");
 
-	dlog("Info: %d media entities detected\n", mvt.num_entities);
+	dlog(DLOG_DEBUG "Debug: %d media entities detected\n", mvt.num_entities);
 
 	mve = calloc(mvt.num_entities, sizeof(*mve));
 	mvp = calloc(mvt.num_pads, sizeof(*mvp));
 	if (!mve || !mvp) {
-		dlog("Error: mve/mvp calloc() failed\n");
+		dlog(DLOG_CRIT "Error: mve/mvp calloc() failed\n");
+		ret = -1;
 		goto cleanup;
 	}
 	mvt.ptr_entities = (unsigned long) mve;
@@ -91,32 +92,34 @@ static int cam_media_init() {
 	for (int i=0; i<mvt.num_entities; i++) {
 		if (strcmp(G_SUBDEV_ENTITY_NAME, mve[i].name) == 0) {
 			entity_id = mve[i].id;
-			dlog("Info: %s: subdev entity id = %d\n", G_SUBDEV_ENTITY_NAME,
+			dlog(DLOG_DEBUG "Debug: %s: subdev entity id = %d\n", G_SUBDEV_ENTITY_NAME,
 				 entity_id);
 		}
 	}
 
 	if (entity_id == -1) {
-		dlog("Error: media entity %s not found\n", G_SUBDEV_ENTITY_NAME);
+		dlog(DLOG_CRIT "Error: media entity %s not found\n", G_SUBDEV_ENTITY_NAME);
+		ret = -1;
 		goto cleanup;
 	}
 
 	for (int i=0; i<mvt.num_pads; i++) {
 		if (mvp[i].entity_id == entity_id) {
 			subdev_pad = mvp[i].index;
-			dlog("Info: %s: subdev pad = %d\n", G_SUBDEV_ENTITY_NAME, subdev_pad);
+			dlog(DLOG_DEBUG "Debug: %s: subdev pad = %d\n", G_SUBDEV_ENTITY_NAME, subdev_pad);
 		}
 	}
 
 	if (subdev_pad == -1) {
-		dlog("Error: no subdev pad found for %s\n", G_SUBDEV_ENTITY_NAME);
+		dlog(DLOG_CRIT "Error: no subdev pad found for %s\n", G_SUBDEV_ENTITY_NAME);
+		ret = -1;
 		goto cleanup;
 	}
 
 	struct media_entity_desc dsc = { .id = entity_id };
 	perror_cleanup(ioctl(mfd, MEDIA_IOC_ENUM_ENTITIES, &dsc), "MEDIA_IOC_ENUM_ENTITIES");
 
-	dlog("Info: %s: subdev major = %d, minor = %d\n",
+	dlog(DLOG_DEBUG "Debug: %s: subdev major = %d, minor = %d\n",
 		dsc.name, dsc.dev.major, dsc.dev.minor);
 
 	struct v4l2_fract fract = { .numerator = 1, .denominator = G_FPS };
@@ -135,16 +138,21 @@ static int cam_media_init() {
 	struct v4l2_subdev_format sfmt = {
 		.pad = subdev_pad,
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
-		.format.width = g_width,
-		.format.height = g_height,
-		.format.code = MEDIA_BUS_FMT_UYVY8_2X8,
-		.format.field = V4L2_FIELD_NONE,
 	};
+
+	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_G_FMT, &sfmt),
+					"VIDIOC_SUBDEV_G_FMT");
+
+	sfmt.format.width = g_width;
+	sfmt.format.height = g_height;
+	sfmt.format.code = MEDIA_BUS_FMT_UYVY8_2X8;
+	sfmt.format.field = V4L2_FIELD_NONE;
 
 	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FMT, &sfmt),
 					"VIDIOC_SUBDEV_S_FMT");
-	dlog("Info: %s: subdev format set to: %dx%d, code = 0x%x\n",
-		sfmt.format.width, sfmt.format.height, sfmt.format.code);
+
+	dlog("Info: %s: subdev format set to: %dx%d, media bus format code = 0x%x\n",
+		G_SUBDEV_ENTITY_NAME, sfmt.format.width, sfmt.format.height, sfmt.format.code);
 
 cleanup:
 	if (sfd >= 0) {
@@ -164,8 +172,11 @@ cleanup:
 
 int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 
+	g_width = width;
+	g_height = height;
+
 	if (cam_media_init() < 0) {
-		dlog("Error: cam_media_init() failed\n");
+		dlog(DLOG_CRIT "Error: cam_media_init() failed\n");
 		return -1;
 	}
 
@@ -175,7 +186,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) ||
 		!(cap.capabilities & V4L2_CAP_STREAMING)) {
-		dlog("Error: V4L2_CAP_VIDEO_CAPTURE or V4L2_CAP_STREAMING not supported\n");
+		dlog(DLOG_CRIT "Error: V4L2_CAP_VIDEO_CAPTURE or V4L2_CAP_STREAMING not supported\n");
 		return -1;
 	}
 	
@@ -185,8 +196,6 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 		.fmt.pix.height = height,
 		.fmt.pix.pixelformat = pixfmt,
 	};
-	g_width = width;
-	g_height = height;
 	perror_ret(ioctl(fd, VIDIOC_S_FMT, &fmt), "VIDIOC_S_FMT");
 	
 	for (int i=0; i<NUM_CTRLS; i++)
@@ -204,7 +213,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 	buffers = calloc(g_buf_count, sizeof(*buffers));
 
 	if (buffers == NULL) {
-		dlog("Error: buffer calloc() failed\n");
+		dlog(DLOG_CRIT "Error: buffer calloc() failed\n");
 		return -1;
 	}
 
@@ -289,9 +298,9 @@ int cam_stop_capture() {
 }
 
 void cam_deinit() {
-	for (int i=0; i<g_buf_count; i++)
-		munmap(buffers[i].start, buffers[i].length);
 	if (buffers) {
+		for (int i=0; i<g_buf_count; i++)
+			munmap(buffers[i].start, buffers[i].length);
 		free(buffers);
 		buffers = NULL;
 	}
@@ -303,3 +312,4 @@ void cam_close() {
 		fd = -1;
 	}
 }
+
