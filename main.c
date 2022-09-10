@@ -30,22 +30,49 @@
 	https://www.kernel.org/doc/html/latest/userspace-api/media/mediactl/media-controller.html
 */
 
-int main() {
-	h264_init();
-	cam_open();
-	cam_init(G_WIDTH, G_HEIGHT, V4L2_PIX_FMT_NV12);
-	cam_start_capture();
+void usage(char *argv0) {
+	dlog(DLOG_WARN
+		"Usage: %s [width] [height]\n"
+		"Supported formats: 640x480, 1280x720, 1920x1080\n",
+		argv0);
+}
 
-	struct timespec t_start;
-	clock_gettime(CLOCK_REALTIME, &t_start);
+int main(int argc, char **argv) {
+	int ret = 0;
+
+	if (argc < 3) {
+		usage(argv[0]);
+		return 0;
+	}
+
+	int width = atoi(argv[1]);
+	int height = atoi(argv[2]);
+
+	dlog_cleanup(h264_init(), DLOG_CRIT "Error: h264_init() failed\n");
+	dlog_cleanup(cam_open(), DLOG_CRIT "Error: cam_open() failed\n");
+
+	if ((width == 640 && height == 480) ||
+		(width == 1280 && height == 720) ||
+		(width == 1920 && height == 1080)) {
+		dlog_cleanup(cam_init(width, height, V4L2_PIX_FMT_NV12),
+					DLOG_CRIT "Error: cam_init() failed\n");
+	}
+	else {
+		dlog(DLOG_CRIT "Error: unsupported width/height\n");
+		usage(argv[0]);
+	}
+
+	dlog_cleanup(cam_start_capture(), DLOG_CRIT "Error: cam_start_capture() failed\n");
+
+	rt_timer_start();
 
 	for (int i=0; i<G_FRAMES; i++) {
 
 		int j = cam_dqbuf();
+		dlog_cleanup(j, DLOG_CRIT "Error: cam_dqbuf() failed");
 		buffer_t *buf = cam_get_buf(j);
 
-		//h264_encode(buf->addrVirY, buf->addrVirC);
-		h264_encode(buf->addrPhyY, buf->addrPhyC);
+		dlog_cleanup(h264_encode(buf->addrPhyY, buf->addrPhyC), DLOG_CRIT "Error: h264_encode() failed\n");
 
 		if (ENABLE_SAVE) {
 			char output_file[32] = "frame";
@@ -56,23 +83,21 @@ int main() {
 			fwrite(buf->start, 1, buf->length, fp);
 			fclose(fp);
 		}
-
-		cam_qbuf();	// Queue the recently dequeued buffer back to the device
+		// Queue the recently dequeued buffer back to the device
+		dlog_cleanup(cam_qbuf(), DLOG_CRIT "Error: cam_qbuf() failed\n");
 	}
 
-	struct timespec t_stop;
-	clock_gettime(CLOCK_REALTIME, &t_stop);
+	rt_timer_stop();
 
-	long seconds = t_stop.tv_sec - t_start.tv_sec;
-	long nanoseconds = t_stop.tv_nsec - t_start.tv_nsec;
-	double elapsed = seconds + nanoseconds / 1e9;
+	double elapsed = rt_timer_elapsed();
 
+	dlog("\nInfo: captured %d frames in %.2fs; FPS = %.1f\n",
+		G_FRAMES, elapsed, G_FRAMES / elapsed);
+
+cleanup:
 	cam_stop_capture();
 	cam_deinit();
 	cam_close();
 	h264_deinit();
-
-	dlog("\nInfo: captured %d frames in %.2fs; FPS = %.1f\n",
-		G_FRAMES, elapsed, G_FRAMES / elapsed);
-	return 0;
+	return ret;
 }

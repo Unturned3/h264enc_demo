@@ -33,24 +33,26 @@ struct v4l2_control ctrls[NUM_CTRLS] = {
 	{V4L2_CID_VFLIP, 1}
 };
 
+#ifdef ENABLE_DEBUG
 static int check_cnt = 0;
+#endif
 
 int sanity_check(int buf_idx, int offset) {
-	/*
+#ifdef ENABLE_DEBUG
 	int addr = offset;
 	if (check_cnt % 30 == 29) {
 		dlog("Info: sanity check: offset = %d\n", offset);
 	}
-	check_ret(ioctl(fd, CAM_V2P_IOCTL, &addr), "CAM_V2P_IOCTL");
+	perror_ret(ioctl(fd, CAM_V2P_IOCTL, &addr), "CAM_V2P_IOCTL");
 	assert(buffers[buf_idx].addrPhyY == addr);
 	check_cnt += 1;
-	*/
+#endif
 	return 0;
 }
 
 int cam_open() {
 	fd = open("/dev/video0", O_RDWR, 0);
-	check_ret(fd, "open /dev/video0");
+	perror_ret(fd, "open /dev/video0");
 	return 0;
 }
 
@@ -60,17 +62,17 @@ static int cam_media_init() {
 	struct media_v2_pad *mvp = NULL;
 
 	int mfd = open("/dev/media0", O_RDWR, 0);
-	check_cleanup(mfd, "open /dev/media0");
+	perror_cleanup(mfd, "open /dev/media0");
 
 	struct media_device_info mdi;
 	CLEAR(mdi);
-	check_cleanup(ioctl(mfd, MEDIA_IOC_DEVICE_INFO, &mdi), "MEDIA_IOC_DEVICE_INFO");
+	perror_cleanup(ioctl(mfd, MEDIA_IOC_DEVICE_INFO, &mdi), "MEDIA_IOC_DEVICE_INFO");
 
 	dlog("Info: media device driver: %s\n", mdi.driver);
 
 	struct media_v2_topology mvt;
 	CLEAR(mvt);
-	check_cleanup(ioctl(mfd, MEDIA_IOC_G_TOPOLOGY, &mvt), "MEDIA_IOC_G_TOPOLOGY");
+	perror_cleanup(ioctl(mfd, MEDIA_IOC_G_TOPOLOGY, &mvt), "MEDIA_IOC_G_TOPOLOGY");
 
 	dlog("Info: %d media entities detected\n", mvt.num_entities);
 
@@ -82,7 +84,7 @@ static int cam_media_init() {
 	}
 	mvt.ptr_entities = (unsigned long) mve;
 	mvt.ptr_pads = (unsigned long) mvp;
-	check_cleanup(ioctl(mfd, MEDIA_IOC_G_TOPOLOGY, &mvt), "MEDIA_IOC_G_TOPOLOGY");
+	perror_cleanup(ioctl(mfd, MEDIA_IOC_G_TOPOLOGY, &mvt), "MEDIA_IOC_G_TOPOLOGY");
 
 	int entity_id = -1, subdev_pad = -1;
 
@@ -112,7 +114,7 @@ static int cam_media_init() {
 	}
 
 	struct media_entity_desc dsc = { .id = entity_id };
-	check_cleanup(ioctl(mfd, MEDIA_IOC_ENUM_ENTITIES, &dsc), "MEDIA_IOC_ENUM_ENTITIES");
+	perror_cleanup(ioctl(mfd, MEDIA_IOC_ENUM_ENTITIES, &dsc), "MEDIA_IOC_ENUM_ENTITIES");
 
 	dlog("Info: %s: subdev major = %d, minor = %d\n",
 		dsc.name, dsc.dev.major, dsc.dev.minor);
@@ -124,8 +126,8 @@ static int cam_media_init() {
 	};
 
 	int sfd = open("/dev/v4l-subdev0", O_RDWR);
-	check_cleanup(sfd, "open /dev/v4l2-subdev0");
-	check_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &ival),
+	perror_cleanup(sfd, "open /dev/v4l2-subdev0");
+	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &ival),
 					"VIDIOC_SUBDEV_S_FRAME_INTERVAL");
 	
 	dlog("Info: %s: frame rate set to %d\n", G_SUBDEV_ENTITY_NAME, G_FPS);
@@ -133,13 +135,13 @@ static int cam_media_init() {
 	struct v4l2_subdev_format sfmt = {
 		.pad = subdev_pad,
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
-		.format.width = 1920,
-		.format.height = 1080,
+		.format.width = g_width,
+		.format.height = g_height,
 		.format.code = MEDIA_BUS_FMT_UYVY8_2X8,
 		.format.field = V4L2_FIELD_NONE,
 	};
 
-	check_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FMT, &sfmt),
+	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FMT, &sfmt),
 					"VIDIOC_SUBDEV_S_FMT");
 	dlog("Info: %s: subdev format set to: %dx%d, code = 0x%x\n",
 		sfmt.format.width, sfmt.format.height, sfmt.format.code);
@@ -160,37 +162,6 @@ cleanup:
 	return ret;
 }
 
-static int cam_init_userptr(unsigned int buffer_size) {
-	struct v4l2_requestbuffers req;
-	CLEAR(req);
-
-	req.count = g_buf_count;
-	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	req.memory = V4L2_MEMORY_USERPTR;
-
-	check_ret(ioctl(fd, VIDIOC_REQBUFS, &req), "VIDIOC_REQBUFS");
-	g_buf_count = req.count;
-
-	buffers = calloc(g_buf_count, sizeof(*buffers));
-
-	if (buffers == NULL) {
-		dlog("Error: buffer calloc() failed\n");
-		return -1;
-	}
-
-	/*
-	for (n_buffers = 0; n_buffers < 4; ++n_buffers) {
-		buffers[n_buffers].length = buffer_size;
-		buffers[n_buffers].start = malloc(buffer_size);
-
-		if (!buffers[n_buffers].start) {
-			fprintf(stderr, "Out of memory\n");
-			exit(EXIT_FAILURE);
-		}
-	}
-	*/
-}
-
 int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 
 	if (cam_media_init() < 0) {
@@ -200,7 +171,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 
 	struct v4l2_capability cap;
 	CLEAR(cap);
-	check_ret(ioctl(fd, VIDIOC_QUERYCAP, &cap), "VIDIOC_QUERYCAP");
+	perror_ret(ioctl(fd, VIDIOC_QUERYCAP, &cap), "VIDIOC_QUERYCAP");
 
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) ||
 		!(cap.capabilities & V4L2_CAP_STREAMING)) {
@@ -216,17 +187,17 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 	};
 	g_width = width;
 	g_height = height;
-	check_ret(ioctl(fd, VIDIOC_S_FMT, &fmt), "VIDIOC_S_FMT");
+	perror_ret(ioctl(fd, VIDIOC_S_FMT, &fmt), "VIDIOC_S_FMT");
 	
 	for (int i=0; i<NUM_CTRLS; i++)
-		check_ret(ioctl(fd, VIDIOC_S_CTRL, &ctrls[i]), "VIDIOC_S_CTRL");
+		perror_ret(ioctl(fd, VIDIOC_S_CTRL, &ctrls[i]), "VIDIOC_S_CTRL");
 
 	struct v4l2_requestbuffers req = {
 		.count = g_buf_count,
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 		.memory = V4L2_MEMORY_MMAP,
 	};
-	check_ret(ioctl(fd, VIDIOC_REQBUFS, &req), "VIDIOC_REQBUFS");
+	perror_ret(ioctl(fd, VIDIOC_REQBUFS, &req), "VIDIOC_REQBUFS");
 
 	g_buf_count = req.count;	// update the actual number of buffers expected by device
 
@@ -243,7 +214,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 			.memory = V4L2_MEMORY_MMAP,
 			.index = i,
 		};
-		check_ret(ioctl(fd, VIDIOC_QUERYBUF, &buf), "VIDIOC_QUERYBUF");
+		perror_ret(ioctl(fd, VIDIOC_QUERYBUF, &buf), "VIDIOC_QUERYBUF");
 
 		buffers[i].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE,
 								MAP_SHARED, fd, buf.m.offset);
@@ -257,7 +228,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 		buffers[i].addrVirC = buffers[i].start + g_width * g_height;
 		
 		int addr = buf.m.offset;
-		check_ret(ioctl(fd, CAM_V2P_IOCTL, &addr), "CAM_V2P_IOCTL");
+		perror_ret(ioctl(fd, CAM_V2P_IOCTL, &addr), "CAM_V2P_IOCTL");
 		buffers[i].addrPhyY = (void *) addr;
 		//buffers[i].addrPhyC = addr + ALIGN_16B(g_width) * ALIGN_16B(g_height);
 		buffers[i].addrPhyC = (void *) (addr + g_width * g_height);
@@ -272,11 +243,11 @@ int cam_start_capture() {
 			.memory = V4L2_MEMORY_MMAP,
 			.index = i,
 		};
-		check_ret(ioctl(fd, VIDIOC_QBUF, &buf), "VIDIOC_QBUF");
+		perror_ret(ioctl(fd, VIDIOC_QBUF, &buf), "VIDIOC_QBUF");
 		sanity_check(i, buf.m.offset);
 	}
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	check_ret(ioctl(fd, VIDIOC_STREAMON, &type), "VIDIOC_STREAMON");
+	perror_ret(ioctl(fd, VIDIOC_STREAMON, &type), "VIDIOC_STREAMON");
 	return 0;
 }
 
@@ -287,7 +258,7 @@ int cam_dqbuf() {
 		.memory = V4L2_MEMORY_MMAP,
 		.index = buf_idx,
 	};
-	check_ret(ioctl(fd, VIDIOC_DQBUF, &buf), "VIDIOC_DQBUF");
+	perror_ret(ioctl(fd, VIDIOC_DQBUF, &buf), "VIDIOC_DQBUF");
 	sanity_check(buf_idx, buf.m.offset);
 	return buf_idx;
 }
@@ -305,7 +276,7 @@ int cam_qbuf() {
 		.memory = V4L2_MEMORY_MMAP,
 		.index = buf_idx,
 	};
-	check_ret(ioctl(fd, VIDIOC_QBUF, &buf), "VIDIOC_QBUF");
+	perror_ret(ioctl(fd, VIDIOC_QBUF, &buf), "VIDIOC_QBUF");
 	sanity_check(buf_idx, buf.m.offset);
 	buf_idx = (buf_idx + 1) % g_buf_count;
 	return 0;
@@ -313,7 +284,7 @@ int cam_qbuf() {
 
 int cam_stop_capture() {
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	check_ret(ioctl(fd, VIDIOC_STREAMOFF, &type), "VIDIOC_STREAMOFF");
+	perror_ret(ioctl(fd, VIDIOC_STREAMOFF, &type), "VIDIOC_STREAMOFF");
 	return 0;
 }
 

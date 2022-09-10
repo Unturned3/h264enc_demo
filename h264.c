@@ -10,7 +10,7 @@
 #include "util.h"
 #include "conf.h"
 
-static VideoEncoder *gVideoEnc;
+static VideoEncoder *gVideoEnc = NULL;
 static VencBaseConfig baseConfig;
 static int g_width = G_WIDTH;
 static int g_height = G_HEIGHT;
@@ -105,12 +105,17 @@ int h264_encode(unsigned char *addrPhyY, unsigned char *addrPhyC) {
 }
 
 void h264_deinit() {
-	if (baseConfig.memops != NULL) {
+	if (baseConfig.memops) {
 		CdcMemClose(baseConfig.memops);
 		baseConfig.memops = NULL;
 	}
-	ReleaseAllocInputBuffer(gVideoEnc);
-	VideoEncDestroy(gVideoEnc);
-	gVideoEnc = NULL;
-	fclose(fpH264);
+	if (gVideoEnc) {
+		ReleaseAllocInputBuffer(gVideoEnc);
+		VideoEncDestroy(gVideoEnc);
+		gVideoEnc = NULL;
+	}
+	if (fpH264) {
+		fclose(fpH264);
+		fpH264 = NULL;
+	}
 }
