@@ -125,6 +125,17 @@ static int cam_media_init() {
 		goto cleanup;
 	}
 
+	// Reset frame rate to 30FPS (default for most media bus formats)
+	{
+		struct v4l2_fract fract = { .numerator = 1, .denominator = 30 };
+		struct v4l2_subdev_frame_interval ival = {
+			.interval = fract,
+			.pad = subdev_pad,
+		};
+		perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &ival),
+						"VIDIOC_SUBDEV_S_FRAME_INTERVAL");
+	}
+
 	// Set subdev media bus format
 
 	struct v4l2_subdev_format sfmt = {
