@@ -10,7 +10,7 @@
 #include "conf.h"
 #include "util.h"
 
-int h264_init();
+int h264_init(int width, int height);
 
 int h264_encode(unsigned char *AddrVirY, unsigned char *AddrVirC);
 

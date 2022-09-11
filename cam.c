@@ -68,16 +68,14 @@ static int cam_media_init() {
 	struct media_v2_entity *mve = NULL;
 	struct media_v2_pad *mvp = NULL;
 
+	// Open media / subdev file descriptors
+
 	int mfd = open("/dev/media0", O_RDWR, 0);
 	perror_cleanup(mfd, "open /dev/media0");
 	int sfd = open("/dev/v4l-subdev0", O_RDWR);
 	perror_cleanup(sfd, "open /dev/v4l2-subdev0");
 
-	struct media_device_info mdi;
-	CLEAR(mdi);
-	perror_cleanup(ioctl(mfd, MEDIA_IOC_DEVICE_INFO, &mdi), "MEDIA_IOC_DEVICE_INFO");
-
-	dlog(DLOG_DEBUG "Debug: media device driver: %s\n", mdi.driver);
+	// Query media API topology
 
 	struct media_v2_topology mvt;
 	CLEAR(mvt);
@@ -95,6 +93,8 @@ static int cam_media_init() {
 	mvt.ptr_entities = (unsigned long) mve;
 	mvt.ptr_pads = (unsigned long) mvp;
 	perror_cleanup(ioctl(mfd, MEDIA_IOC_G_TOPOLOGY, &mvt), "MEDIA_IOC_G_TOPOLOGY");
+
+	// Find entity id and subdev pad of device
 
 	int entity_id = -1, subdev_pad = -1;
 
@@ -125,11 +125,6 @@ static int cam_media_init() {
 		goto cleanup;
 	}
 
-	struct media_entity_desc dsc = { .id = entity_id };
-	perror_cleanup(ioctl(mfd, MEDIA_IOC_ENUM_ENTITIES, &dsc), "MEDIA_IOC_ENUM_ENTITIES");
-	dlog(DLOG_DEBUG "Debug: %s: subdev major = %d, minor = %d\n",
-		dsc.name, dsc.dev.major, dsc.dev.minor);
-	
 	// Set frame rate
 
 	struct v4l2_fract fract = { .numerator = 1, .denominator = G_FPS };
@@ -210,11 +205,12 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 	};
 	perror_ret(ioctl(fd, VIDIOC_S_FMT, &fmt), "VIDIOC_S_FMT");
 	
-	// Set V4L2 controls specified in array ctrls[]
+	// Set V4L2 controls specified in ctrls[]
 	for (int i=0; i<NUM_CTRLS; i++)
 		perror_ret(ioctl(fd, VIDIOC_S_CTRL, &ctrls[i]), "VIDIOC_S_CTRL");
 
 	// Request buffers from device (for storing frames later)
+	// using the V4L2_MEMORY_MMAP mechanism
 	struct v4l2_requestbuffers req = {
 		.count = g_buf_count,
 		.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -231,7 +227,7 @@ int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
 		return -1;
 	}
 
-	// MMAP buffers
+	// MMAP buffers from device
 	for (int i=0; i<g_buf_count; i++) {
 		struct v4l2_buffer buf = {
 			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
