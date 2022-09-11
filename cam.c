@@ -22,7 +22,7 @@
 #include "conf.h"
 
 static int fd = -1;
-static int g_width = 640, g_height = 480;
+static int g_width = 640, g_height = 480, g_fps = G_FPS;
 static int g_buf_count = G_BUF_COUNT;
 static int buf_idx = 0;
 static buffer_t *buffers = NULL;
@@ -127,7 +127,7 @@ static int cam_media_init() {
 
 	// Set frame rate
 
-	struct v4l2_fract fract = { .numerator = 1, .denominator = G_FPS };
+	struct v4l2_fract fract = { .numerator = 1, .denominator = g_fps };
 	struct v4l2_subdev_frame_interval ival = {
 		.interval = fract,
 		.pad = subdev_pad,
@@ -136,7 +136,8 @@ static int cam_media_init() {
 	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &ival),
 					"VIDIOC_SUBDEV_S_FRAME_INTERVAL");
 	
-	dlog("Info: %s: frame rate set to %d\n", G_SUBDEV_ENTITY_NAME, G_FPS);
+	dlog("Info: %s: frame rate: requested for %d; image sensor accepted %d\n",
+		G_SUBDEV_ENTITY_NAME, g_fps, ival.interval.denominator);
 
 	// Set subdev media bus format
 
@@ -175,10 +176,11 @@ cleanup:
 	return ret;
 }
 
-int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt) {
+int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt, unsigned int fps) {
 
 	g_width = width;
 	g_height = height;
+	g_fps = fps;
 
 	if (cam_media_init() < 0) {
 		dlog(DLOG_CRIT "Error: cam_media_init() failed\n");

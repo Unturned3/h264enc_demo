@@ -27,7 +27,7 @@ typedef struct {
 
 int cam_open();
 
-int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt);
+int cam_init(unsigned int width, unsigned int height, unsigned int pixfmt, unsigned int fps);
 
 int cam_start_capture();
 

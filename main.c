@@ -33,8 +33,9 @@
 
 void usage(char *argv0) {
 	dlog(DLOG_WARN
-		"Usage: %s [width] [height]\n"
+		"Usage: %s [width] [height] [FPS]\n"
 		"Supported formats: 640x480, 1280x720, 1920x1080\n",
+		"All formats support 30FPS; 640x480 also supports 60FPS.\n",
 		argv0);
 }
 
@@ -44,13 +45,14 @@ int main(int argc, char **argv) {
 #endif
 	int ret = 0;
 
-	if (argc < 3) {
+	if (argc < 4) {
 		usage(argv[0]);
 		return 0;
 	}
 
 	int width = atoi(argv[1]);
 	int height = atoi(argv[2]);
+	int fps = atoi(argv[3]);
 
 	if ((width == 640 && height == 480) ||
 		(width == 1280 && height == 720) ||
@@ -58,7 +60,7 @@ int main(int argc, char **argv) {
 
 		dlog_cleanup(h264_init(width, height), DLOG_CRIT "Error: h264_init() failed\n");
 		dlog_cleanup(cam_open(), DLOG_CRIT "Error: cam_open() failed\n");
-		dlog_cleanup(cam_init(width, height, G_V4L2_PIX_FMT),
+		dlog_cleanup(cam_init(width, height, G_V4L2_PIX_FMT, fps),
 					DLOG_CRIT "Error: cam_init() failed\n");
 	}
 	else {
