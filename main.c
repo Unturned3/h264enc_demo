@@ -33,9 +33,10 @@
 
 void usage(char *argv0) {
 	dlog(DLOG_WARN
-		"Usage: %s [width] [height] [FPS]\n"
+		"Usage: %s [width] [height] [FPS] [n_frames]\n"
 		"Supported formats: 640x480, 1280x720, 1920x1080\n",
 		"All formats support 30FPS; 640x480 also supports 60FPS.\n",
+		"n_frames: number of frames to capture; defaults to 450 if omitted.\n",
 		argv0);
 }
 
@@ -45,7 +46,7 @@ int main(int argc, char **argv) {
 #endif
 	int ret = 0;
 
-	if (argc < 4) {
+	if (argc < 4 || argc > 5) {
 		usage(argv[0]);
 		return 0;
 	}
@@ -53,6 +54,12 @@ int main(int argc, char **argv) {
 	int width = atoi(argv[1]);
 	int height = atoi(argv[2]);
 	int fps = atoi(argv[3]);
+
+	int n_frames = G_FRAMES;
+	if (argc == 5) {
+		n_frames = atoi(argv[4]);
+		dlog_cleanup(n_frames, DLOG_CRIT "Error: n_frames must be non-negative\n");
+	}
 
 	if ((width == 640 && height == 480) ||
 		(width == 1280 && height == 720) ||
@@ -74,7 +81,7 @@ int main(int argc, char **argv) {
 	rt_timer_start();
 
 	// Capture frames
-	for (int i=0; i<G_FRAMES; i++) {
+	for (int i=0; i<n_frames; i++) {
 
 		// Dequeue buffer and get its index
 		int j = cam_dqbuf();
