@@ -125,20 +125,6 @@ static int cam_media_init() {
 		goto cleanup;
 	}
 
-	// Set frame rate
-
-	struct v4l2_fract fract = { .numerator = 1, .denominator = g_fps };
-	struct v4l2_subdev_frame_interval ival = {
-		.interval = fract,
-		.pad = subdev_pad,
-	};
-
-	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &ival),
-					"VIDIOC_SUBDEV_S_FRAME_INTERVAL");
-	
-	dlog("Info: %s: frame rate: requested for %d; image sensor accepted %d\n",
-		G_SUBDEV_ENTITY_NAME, g_fps, ival.interval.denominator);
-
 	// Set subdev media bus format
 
 	struct v4l2_subdev_format sfmt = {
@@ -159,6 +145,20 @@ static int cam_media_init() {
 
 	dlog("Info: %s: subdev format set to: %dx%d, media bus format code = 0x%x\n",
 		G_SUBDEV_ENTITY_NAME, sfmt.format.width, sfmt.format.height, sfmt.format.code);
+
+	// Set frame rate
+
+	struct v4l2_fract fract = { .numerator = 1, .denominator = g_fps };
+	struct v4l2_subdev_frame_interval ival = {
+		.interval = fract,
+		.pad = subdev_pad,
+	};
+
+	perror_cleanup(ioctl(sfd, VIDIOC_SUBDEV_S_FRAME_INTERVAL, &ival),
+					"VIDIOC_SUBDEV_S_FRAME_INTERVAL");
+	
+	dlog("Info: %s: frame rate: requested for %d; image sensor accepted %d\n",
+		G_SUBDEV_ENTITY_NAME, g_fps, ival.interval.denominator);
 
 cleanup:
 	if (sfd >= 0) {
