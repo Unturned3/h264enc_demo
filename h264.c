@@ -15,13 +15,15 @@ static VencBaseConfig baseConfig;
 static int g_width = G_WIDTH;
 static int g_height = G_HEIGHT;
 static int g_pix_fmt = G_CEDARC_PIX_FMT;
+static int g_fps = G_FPS;
 
 FILE *fpH264 = NULL;
 
-int h264_init(int width, int height) {
+int h264_init(int width, int height, int fps) {
 
 	g_width = width;
 	g_height = height;
+	g_fps = fps;
 
 	fpH264 = fopen("/mnt/out.h264", "wb");
 	if (fpH264 == NULL) {
@@ -32,7 +34,7 @@ int h264_init(int width, int height) {
 	VencH264Param h264Param = {
 		.bEntropyCodingCABAC = 1,
 		.nBitrate = 8 * 1024 * 1024,
-		.nFramerate = 30,
+		.nFramerate = g_fps,
 		.nCodingMode = VENC_FRAME_CODING,
 		.nMaxKeyInterval = 30,
 		.sProfileLevel.nProfile = VENC_H264ProfileHigh,
