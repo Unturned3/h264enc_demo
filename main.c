@@ -34,10 +34,10 @@
 void usage(char *argv0) {
 	dlog(DLOG_WARN
 		"Usage: %s [width] [height] [FPS] [n_frames]\n"
-		"Supported formats: 640x480, 1280x720, 1920x1080\n",
-		"All formats support 30FPS; 640x480 also supports 60FPS.\n",
-		"n_frames: number of frames to capture; defaults to 450 if omitted.\n",
-		argv0);
+		"Supported formats: 640x480, 1280x720, 1920x1080\n"
+		"All formats support 30FPS; 640x480 also supports 60FPS.\n"
+		"n_frames: number of frames to capture; defaults to 450 if omitted.\n"
+		, argv0);
 }
 
 int main(int argc, char **argv) {
