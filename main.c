@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
 	double elapsed = rt_timer_elapsed();
 
 	dlog("\nInfo: captured %d frames in %.2fs; FPS = %.1f\n",
-		G_FRAMES, elapsed, G_FRAMES / elapsed);
+		n_frames, elapsed, n_frames / elapsed);
 
 cleanup:
 	cam_stop_capture();
