@@ -80,7 +80,7 @@ int h264_init(int width, int height, int fps) {
 	VideoEncGetParameter(gVideoEnc, VENC_IndexParamH264SPSPPS, &sps_pps_data);
 	fwrite(sps_pps_data.pBuffer, 1, sps_pps_data.nLength, fpH264);
 
-	dlog(DLOG_INFO "Info: h264 encocder init OK\n");
+	dlog(DLOG_INFO "Info: h264 encoder init OK\n");
 	return 0;
 }
 
